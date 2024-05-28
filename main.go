@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -127,6 +129,60 @@ func getStudentsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(students)
 }
 
+// Обработчик для создания студента
+func createStudentHandler(w http.ResponseWriter, r *http.Request) {
+	var student Student
+	err := json.NewDecoder(r.Body).Decode(&student)
+	if err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	student.ID = fmt.Sprintf("%d", rand.Intn(100000))
+	students = append(students, student)
+	json.NewEncoder(w).Encode(student)
+}
+
+// Обработчик для обновления студента
+func updateStudentHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var updatedStudent Student
+	err := json.NewDecoder(r.Body).Decode(&updatedStudent)
+	if err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	for i, student := range students {
+		if student.ID == id {
+			students[i] = updatedStudent
+			students[i].ID = id
+			json.NewEncoder(w).Encode(students[i])
+			return
+		}
+	}
+
+	http.Error(w, "Student not found", http.StatusNotFound)
+}
+
+// Обработчик для удаления студента
+func deleteStudentHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	for i, student := range students {
+		if student.ID == id {
+			students = append(students[:i], students[i+1:]...)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+	}
+
+	http.Error(w, "Student not found", http.StatusNotFound)
+}
+
 func main() {
 	r := mux.NewRouter()
 
@@ -135,6 +191,15 @@ func main() {
 
 	// Маршрут для получения списка студентов (требует валидного токена)
 	r.HandleFunc("/students", tokenMiddleware(getStudentsHandler)).Methods("GET")
+
+	// Маршрут для создания студента (требует валидного токена)
+	r.HandleFunc("/students", tokenMiddleware(createStudentHandler)).Methods("POST")
+
+	// Маршрут для обновления студента (требует валидного токена)
+	r.HandleFunc("/students/{id}", tokenMiddleware(updateStudentHandler)).Methods("PUT")
+
+	// Маршрут для удаления студента (требует валидного токена)
+	r.HandleFunc("/students/{id}", tokenMiddleware(deleteStudentHandler)).Methods("DELETE")
 
 	http.ListenAndServe(":8000", r)
 }
